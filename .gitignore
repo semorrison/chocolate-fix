@@ -4,6 +4,7 @@
 .project
 .target/
 target/
+boards
 *.aux
 *.fls
 *.log
