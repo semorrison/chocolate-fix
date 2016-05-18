@@ -227,7 +227,7 @@ case class Puzzle(board: Board, puzzlePieces: Seq[Board]) {
     val pieceDimensions = {
       var result = IndexedSeq.fill(board.dimensions.size)(0)
       while (result.product <= 1) {
-        result = IndexedSeq.tabulate(board.dimensions.size)(i => random(board.dimensions(i), 0.3))
+        result = IndexedSeq.tabulate(board.dimensions.size)(i => random(board.dimensions(i), 0.6))
       }
       result
     }
