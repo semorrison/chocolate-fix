@@ -1,0 +1,10 @@
+.cache-main
+.cache-tests
+.classpath
+.project
+.target/
+target/
+*.aux
+*.fls
+*.log
+*.fdb_latexmk

@@ -1,0 +1,38 @@
+% compile with 'pdflatex -shell-escape puzzles.tex'
+\documentclass[twocolumn,landscape,a4paper]{amsart}
+\setlength{\columnseprule}{0.4pt}
+\usepackage{graphicx}
+\usepackage[margin=20pt]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[catalan]{babel}
+\usepackage{xparse}
+\pagestyle{empty}
+
+\ExplSyntaxOn
+\NewDocumentCommand{\figureloop}{m}
+ {
+  \group_begin:
+  \etex_everyeof:D { \exp_not:N }
+  \tex_endlinechar:D \c_minus_one
+  \seq_gset_split:Nnx \g_figloop_names_seq { , }
+    { \tex_input:D |"ls ~ -m ~ #1*.pdf" ~}
+  \group_end:
+  \seq_map_inline:Nn \g_figloop_names_seq { \dofigureloop { ##1 } }
+ }
+\cs_generate_variant:Nn \seq_gset_split:Nnn {Nnx}
+\seq_new:N \g_figloop_names_seq
+\ExplSyntaxOff
+
+
+\NewDocumentCommand \dofigureloop {m}
+ {
+  \includegraphics{#1}
+  \vspace{0.5cm}\hrule\vspace{0.5cm}
+ }
+
+
+\begin{document}
+\thispagestyle{empty}
+\figureloop{boards/3x3-}
+\end{document}

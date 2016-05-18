@@ -1,0 +1,1 @@
+sbt "test:run-main net.tqft.fix.PuzzleTester $@"
