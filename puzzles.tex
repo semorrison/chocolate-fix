@@ -27,6 +27,7 @@
 
 \NewDocumentCommand \dofigureloop {m}
  {
+  \item
   \includegraphics{#1}
   \vspace{0.5cm}\hrule\vspace{0.5cm}
  }
@@ -34,5 +35,7 @@
 
 \begin{document}
 \thispagestyle{empty}
-\figureloop{boards/3x3-}
+\begin{enumerate}
+\figureloop{boards/4x4-}
+\end{enumerate}
 \end{document}

@@ -96,7 +96,7 @@ case class Board(dimensions: Seq[Int], states: IndexedSeq[CellState]) {
     case f: Filled => 3
   }).sum
 
-  lazy val filledStates = coordinates().map(Filled(_))
+  lazy val filledStates = coordinates().toSeq.map(Filled(_))
   lazy val remainingPieces = filledStates.toSet -- states.collect({ case s: Filled => s })
   lazy val partialProducts = dimensions.reverse.scanLeft(1)(_ * _).reverse.tail
   def coordinates(dimensions: Seq[Int] = dimensions) = dimensions.foldLeft[Iterator[IndexedSeq[Int]]](Iterator(IndexedSeq.empty))({
@@ -127,7 +127,7 @@ case class Board(dimensions: Seq[Int], states: IndexedSeq[CellState]) {
     offsets.flatMap(offset => combine(puzzlePiece, offset))
   }
   def combine(puzzlePiece: Board, offset: IndexedSeq[Int]): Option[Board] = {
-    puzzlePiece.coordinates().foldLeft[Option[Board]](Some(this))({
+    val results = puzzlePiece.coordinates().foldLeft[Option[Board]](Some(this))({
       case (None, _) => None
       case (Some(board), c) => {
         val cOffset = c.zip(offset).map(p => p._1 + p._2)
@@ -136,7 +136,8 @@ case class Board(dimensions: Seq[Int], states: IndexedSeq[CellState]) {
           case Some(newCellState) => Some(board.copy(states = board.states.updated(index(cOffset), newCellState)))
         }
       }
-    }).flatMap(_.consistent).map(_.solve)
+    })
+    results.flatMap(_.consistent)
   }
   def solve: Board = {
     require(dimensions.size == 2)
@@ -173,52 +174,64 @@ case class Board(dimensions: Seq[Int], states: IndexedSeq[CellState]) {
 
 case class Puzzle(board: Board, puzzlePieces: Seq[Board]) {
   override def toString = puzzlePieces.mkString("\n\n")
-  def combinePiece: Iterator[Puzzle] = board.combine(puzzlePieces.head).map(Puzzle(_, puzzlePieces.tail))
-  def combinePieces: Iterator[Puzzle] = {
+  def combinePiece(solving: Boolean): Iterator[Puzzle] = {
+    val combined = board.combine(puzzlePieces.head)
+    val solved = if (solving) combined.map(_.solve) else combined
+    solved.map(Puzzle(_, puzzlePieces.tail))
+  }
+  def combinePieces(solving: Boolean): Iterator[Puzzle] = {
     if (puzzlePieces.isEmpty) {
-      Iterator(this)
+      Iterator(if (solving) copy(board = board.solve) else this)
     } else {
-      combinePiece.flatMap(_.combinePieces)
+      combinePiece(solving).flatMap(_.combinePieces(solving))
     }
   }
-  // TODO: the "distinct"s here are sad-making
-  val solutions = combinePieces.toStream.distinct.flatMap(_.board.placeRemainingPieces).distinct
-  def fixedOrderDifficulty = {
+  def solutions = combinePieces(true).flatMap(_.board.placeRemainingPieces)
+  lazy val twoSolutions = {
+    val sols = solutions
+    if (sols.hasNext) {
+      val s1 = sols.next
+      var s2 = s1
+      while (sols.hasNext && s2 == s1) {
+        s2 = sols.next
+      }
+      if (s2 == s1) {
+        Seq(s1)
+      } else {
+        Seq(s1, s2)
+      }
+    } else {
+      Seq.empty
+    }
+  }
+
+  def difficulty = {
     CellState.combineCounter = 0
     solutions.size
     CellState.combineCounter
   }
-  def difficulty = puzzlePieces.permutations.map(p => Puzzle(board, p).fixedOrderDifficulty).min
-  def unique_? = {
-    val s = solutions.toStream
-    s.nonEmpty && s.tail.isEmpty
+  //  def difficulty = puzzlePieces.permutations.map(p => Puzzle(board, p).fixedOrderDifficulty).min
+  lazy val unique_? = {
+    twoSolutions.size == 1
   }
-  def minimal_? = {
+  lazy val minimal_? = {
     unique_? && puzzlePieces.combinations(puzzlePieces.size - 1).forall(pieces => !Puzzle(board, pieces).unique_?)
   }
   def weakerClues: Iterator[Puzzle] = {
     for (i <- (0 until puzzlePieces.size).iterator; b <- puzzlePieces(i).weakerClues) yield Puzzle(board, puzzlePieces.updated(i, b))
   }
-  def clueMinimal_? = {
+  lazy val clueMinimal_? = {
     unique_? && !weakerClues.exists(_.unique_?)
   }
-  def clueMinimize: Iterator[Puzzle] = {
-    if (clueMinimal_?) {
-      Iterator(this)
-    } else {
-      weakerClues.filter(_.unique_?).flatMap(_.clueMinimize)
-    }
+  def clueMinimize: Puzzle = {
+    weakerClues.find(_.unique_?).map(_.clueMinimize).getOrElse(this)
   }
-  def minimize: Iterator[Puzzle] = {
-    if (minimal_?) {
-      Iterator(this)
-    } else {
-      puzzlePieces.combinations(puzzlePieces.size - 1).map(pieces => Puzzle(board, pieces)).filter(_.unique_?).flatMap(_.minimize)
-    }
+  def minimize: Puzzle = {
+    puzzlePieces.combinations(puzzlePieces.size - 1).map(pieces => Puzzle(board, pieces)).find(_.unique_?).map(_.minimize).getOrElse(this)
   }
   def addPuzzlePiece: Puzzle = {
     // we first find two solutions
-    val IndexedSeq(s1, s2) = solutions.take(2).toIndexedSeq
+    val Seq(s1, s2) = twoSolutions
     // then find somewhere they differ
     val Some(location) = board.coordinates().find(c => s1.states(board.index(c)) != s2.states(board.index(c)))
     // decide the piece size 
@@ -227,13 +240,20 @@ case class Puzzle(board: Board, puzzlePieces: Seq[Board]) {
     val pieceDimensions = {
       var result = IndexedSeq.fill(board.dimensions.size)(0)
       while (result.product <= 1) {
-        result = IndexedSeq.tabulate(board.dimensions.size)(i => random(board.dimensions(i), 0.6))
+        result = IndexedSeq.tabulate(board.dimensions.size)(i => random(board.dimensions(i), 0.5))
       }
       result
     }
-    // decide the offset
-    val pieceOffset = IndexedSeq.tabulate(board.dimensions.size)(i => scala.util.Random.nextInt(board.dimensions(i) + 1 - pieceDimensions(i)))
     val emptyPiece = Board.empty(pieceDimensions)
+    // decide the offset
+    val pieceOffset = {
+      def randomOffset = IndexedSeq.tabulate(board.dimensions.size)(i => scala.util.Random.nextInt(board.dimensions(i) + 1 - pieceDimensions(i)))
+      var result = randomOffset
+      while (!emptyPiece.coordinates().map(c => result.zip(c).map(p => p._1 + p._2)).contains(location)) {
+        result = randomOffset
+      }
+      result
+    }
     // decide which squares to lift
     val newPiece = Board(pieceDimensions, emptyPiece.coordinates().toIndexedSeq.map({
       c =>
@@ -255,13 +275,7 @@ case class Puzzle(board: Board, puzzlePieces: Seq[Board]) {
           }
         }
     }))
-    if (newPiece.dimensions.forall(_ == 1) || newPiece.states.forall(_ == Empty)) {
-      // try again!
-      println("looping")
-      addPuzzlePiece
-    } else {
-      Puzzle(board, (puzzlePieces :+ newPiece).sortBy(-_.weight))
-    }
+    Puzzle(board, (puzzlePieces :+ newPiece).sortBy(-_.weight))
   }
   def addPuzzlePiecesUntilUnique: Puzzle = {
     if (unique_?) {
@@ -276,4 +290,32 @@ case class Puzzle(board: Board, puzzlePieces: Seq[Board]) {
     }
   }
   def shuffle = copy(puzzlePieces = scala.util.Random.shuffle(puzzlePieces))
+  def amalgamate: Puzzle = {
+    val target = for (
+      f <- board.filledStates.toStream;
+      pieces = puzzlePieces.filter(_.states.contains(f));
+      if pieces.size > 1
+    ) yield (f, pieces(0), pieces(1))
+    println("amalgamate targets: " + target.size)
+    (target).headOption match {
+      case None => this
+      case Some((filled, p0, p1)) => {
+        val c0 = p0.coordinates().find(c => p0.states(p0.index(c)) == filled).get
+        val c1 = p1.coordinates().find(c => p1.states(p1.index(c)) == filled).get
+        val mins = c0.zip(c1).map({ case (x0, x1) => -Seq(x0, x1).max })
+        val maxs = c0.zip(c1).zip(p0.dimensions).zip(p1.dimensions).map({ case (((x0, x1), n0), n1) => Seq(n0 - x0, n1 - x1).max })
+        val empty = Board.empty(maxs.zip(mins).map({ p => p._1 - p._2 }))
+        val offset0: IndexedSeq[Int] = c0.zip(c1).map({ case (x0, x1) => Seq(x1 - x0, 0).max })
+        val offset1: IndexedSeq[Int] = c0.zip(c1).map({ case (x0, x1) => Seq(x0 - x1, 0).max })
+        val combined0 = p0.coordinates().foldLeft(empty)({
+          case (b, c) => b.copy(states = b.states.updated(b.index(offset0.zip(c).map(p => p._1 + p._2)), p0.states(p0.index(c))))
+        })
+        val combined1 = p1.coordinates().foldLeft(combined0)({
+          case (b, c) => b.copy(states = b.states.updated(b.index(offset1.zip(c).map(p => p._1 + p._2)), p1.states(p1.index(c))))
+        })
+
+        copy(puzzlePieces = (((puzzlePieces.toSet - p0) - p1) + combined1).toSeq).amalgamate
+      }
+    }
+  }
 }
