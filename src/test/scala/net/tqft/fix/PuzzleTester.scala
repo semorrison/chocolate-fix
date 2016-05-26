@@ -33,7 +33,7 @@ object PuzzleTester extends App {
         difficulty = puzzleDifficulty
       }
       println(puzzle)
-      val render = RenderBoard.writePuzzlePDF(puzzle)().toString
+//      val render = RenderBoard.writePuzzlePDF(puzzle)().toString
 //      ("open " + render).!!
     }
   }

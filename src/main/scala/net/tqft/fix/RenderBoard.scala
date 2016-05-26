@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
 object RenderBoard {
-  val outputPath = Paths.get("/Users/scott/projects/fix/boards/")
+  val outputPath = Paths.get("/Users/scott/projects/chocolate-fix/boards/")
 
   private def getProgramPath(programName: String, searchDirs: Seq[String]) = {
     val paths = for (
