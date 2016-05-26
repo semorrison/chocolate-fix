@@ -28,12 +28,13 @@ object PuzzleTester extends App {
     println(s"found a puzzle with ${puzzle.puzzlePieces.size} pieces")
     val puzzleDifficulty = puzzle.difficulty
     println(puzzleDifficulty)
-//    if (puzzleDifficulty > difficulty * 0.65) {
+    if (puzzleDifficulty > difficulty * 0.55) {
       if (puzzleDifficulty > difficulty) {
         difficulty = puzzleDifficulty
       }
       println(puzzle)
-//      ("open " + RenderBoard.writePuzzlePDF(puzzle)().toString).!!
-//    }
+      val render = RenderBoard.writePuzzlePDF(puzzle)().toString
+//      ("open " + render).!!
+    }
   }
 }
